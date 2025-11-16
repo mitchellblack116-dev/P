@@ -1,0 +1,358 @@
+import React, { useState } from 'react';
+import { Download, Zap, Bomb } from 'lucide-react';
+
+const SRB2PK3Generator = () => {
+  const [modName, setModName] = useState('DBZ_Abilities');
+  const [characterName, setCharacterName] = useState('Sonic');
+  const [includeKamehameha, setIncludeKamehameha] = useState(true);
+  const [includeSpiritBomb, setIncludeSpiritBomb] = useState(true);
+  const [kamehamehaKey, setKamehamehaKey] = useState('Custom1');
+  const [spiritBombKey, setSpiritBombKey] = useState('Custom2');
+
+  const generateLuaScript = () => {
+    let script = `-- ${modName} for SRB2
+-- Dragon Ball Z Abilities Mod
+
+local kamehameha_charging = {}
+local spirit_bomb_charging = {}
+
+`;
+
+    if (includeKamehameha) {
+      script += `-- Kamehameha Attack
+local function FireKamehameha(player)
+    local mo = player.mo
+    if not mo or not mo.valid then return end
+    
+    -- Create projectile
+    local proj = P_SpawnMobj(mo.x + P_ReturnThrustX(mo, mo.angle, 64*FRACUNIT),
+                            mo.y + P_ReturnThrustY(mo, mo.angle, 64*FRACUNIT),
+                            mo.z + 32*FRACUNIT,
+                            MT_THROWNBOUNCE)
+    
+    proj.angle = mo.angle
+    proj.target = mo
+    P_InstaThrust(proj, mo.angle, 60*FRACUNIT)
+    proj.momz = 0
+    
+    -- Visual effects
+    local spark = P_SpawnMobj(proj.x, proj.y, proj.z, MT_SONIC3KBOSSEXPLODE)
+    spark.color = SKINCOLOR_CYAN
+    
+    S_StartSound(mo, sfx_spndsh)
+    
+    print(player.name.." used Kamehameha!")
+end
+
+addHook("PlayerThink", function(player)
+    if player.cmd.buttons & BT_${kamehamehaKey.toUpperCase()} and not kamehameha_charging[#player] then
+        kamehameha_charging[#player] = 1
+    end
+    
+    if kamehameha_charging[#player] then
+        kamehameha_charging[#player] = $ + 1
+        
+        -- Charging effect
+        if kamehameha_charging[#player] % 4 == 0 then
+            local mo = player.mo
+            local spark = P_SpawnMobj(mo.x + P_RandomRange(-32, 32)*FRACUNIT,
+                                     mo.y + P_RandomRange(-32, 32)*FRACUNIT,
+                                     mo.z + P_RandomRange(0, 48)*FRACUNIT,
+                                     MT_SONIC3KBOSSEXPLODE)
+            spark.color = SKINCOLOR_CYAN
+        end
+        
+        -- Release
+        if not (player.cmd.buttons & BT_${kamehamehaKey.toUpperCase()}) then
+            if kamehameha_charging[#player] >= 35 then
+                FireKamehameha(player)
+            end
+            kamehameha_charging[#player] = nil
+        end
+    end
+end)
+
+`;
+    }
+
+    if (includeSpiritBomb) {
+      script += `-- Spirit Bomb Attack
+local function CreateSpiritBomb(player)
+    local mo = player.mo
+    if not mo or not mo.valid then return end
+    
+    -- Create large explosive projectile
+    local bomb = P_SpawnMobj(mo.x, mo.y, mo.z + 96*FRACUNIT, MT_THROWNGRENADE)
+    bomb.target = mo
+    bomb.fuse = 70
+    bomb.momz = 8*FRACUNIT
+    
+    -- Make it bigger and more dramatic
+    bomb.scale = 2*FRACUNIT
+    bomb.destscale = 3*FRACUNIT
+    
+    -- Visual effects
+    for i = 1, 8 do
+        local angle = FixedAngle(i * 45 * FRACUNIT)
+        local spark = P_SpawnMobj(bomb.x + P_ReturnThrustX(nil, angle, 48*FRACUNIT),
+                                 bomb.y + P_ReturnThrustY(nil, angle, 48*FRACUNIT),
+                                 bomb.z,
+                                 MT_SONIC3KBOSSEXPLODE)
+        spark.color = SKINCOLOR_GOLD
+    end
+    
+    S_StartSound(mo, sfx_s3kb4)
+    
+    print(player.name.." launched a Spirit Bomb!")
+end
+
+addHook("PlayerThink", function(player)
+    if player.cmd.buttons & BT_${spiritBombKey.toUpperCase()} and not spirit_bomb_charging[#player] then
+        spirit_bomb_charging[#player] = 1
+    end
+    
+    if spirit_bomb_charging[#player] then
+        spirit_bomb_charging[#player] = $ + 1
+        
+        player.mo.momx = 0
+        player.mo.momy = 0
+        
+        -- Charging effect
+        if spirit_bomb_charging[#player] % 3 == 0 then
+            local mo = player.mo
+            local angle = FixedAngle(P_RandomRange(0, 360) * FRACUNIT)
+            local dist = P_RandomRange(32, 64)
+            local spark = P_SpawnMobj(mo.x + P_ReturnThrustX(nil, angle, dist*FRACUNIT),
+                                     mo.y + P_ReturnThrustY(nil, angle, dist*FRACUNIT),
+                                     mo.z + P_RandomRange(0, 64)*FRACUNIT,
+                                     MT_SONIC3KBOSSEXPLODE)
+            spark.color = SKINCOLOR_GOLD
+        end
+        
+        -- Release
+        if not (player.cmd.buttons & BT_${spiritBombKey.toUpperCase()}) then
+            if spirit_bomb_charging[#player] >= 70 then
+                CreateSpiritBomb(player)
+            end
+            spirit_bomb_charging[#player] = nil
+        end
+    end
+end)
+
+`;
+    }
+
+    script += `print("${modName} loaded successfully!")
+print("Abilities: ${includeKamehameha ? 'Kamehameha' : ''}${includeKamehameha && includeSpiritBomb ? ', ' : ''}${includeSpiritBomb ? 'Spirit Bomb' : ''}")
+`;
+
+    return script;
+  };
+
+  const generateSOCFile = () => {
+    return `# ${modName} - SOC Configuration
+# Object and state definitions for Dragon Ball abilities
+
+# Enhanced projectile properties
+Thing 68 // MT_THROWNBOUNCE
+DeathSound = 0
+Speed = 60
+
+# Enhanced explosion effects
+Thing 69 // MT_THROWNGRENADE
+Radius = 196608
+Height = 393216
+Speed = 25
+`;
+  };
+
+  const downloadPK3 = () => {
+    const JSZip = window.JSZip || null;
+    
+    if (!JSZip) {
+      // Fallback: download individual files
+      const luaScript = generateLuaScript();
+      const socFile = generateSOCFile();
+      
+      // Download Lua file
+      const luaBlob = new Blob([luaScript], { type: 'text/plain' });
+      const luaUrl = URL.createObjectURL(luaBlob);
+      const luaLink = document.createElement('a');
+      luaLink.href = luaUrl;
+      luaLink.download = `${modName}.lua`;
+      luaLink.click();
+      
+      // Download SOC file
+      setTimeout(() => {
+        const socBlob = new Blob([socFile], { type: 'text/plain' });
+        const socUrl = URL.createObjectURL(socBlob);
+        const socLink = document.createElement('a');
+        socLink.href = socUrl;
+        socLink.download = `${modName}.soc`;
+        socLink.click();
+      }, 100);
+      
+      alert('Files downloaded! Place both .lua and .soc files in a PK3/ZIP archive to use in SRB2.');
+      return;
+    }
+
+    // Create PK3 (ZIP) file
+    const zip = new JSZip();
+    
+    zip.file('LUA_ABIL.lua', generateLuaScript());
+    zip.file('SOC_ABIL.soc', generateSOCFile());
+    
+    zip.generateAsync({ type: 'blob' }).then(blob => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${modName}.pk3`;
+      link.click();
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-500 via-red-500 to-purple-600 p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-2xl p-8">
+          <h1 className="text-4xl font-bold text-center mb-2 text-gray-800">
+            SRB2 PK3 Generator
+          </h1>
+          <p className="text-center text-gray-600 mb-8">
+            Create Dragon Ball Z ability mods for Sonic Robo Blast 2
+          </p>
+
+          <div className="space-y-6">
+            {/* Mod Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Mod Name
+              </label>
+              <input
+                type="text"
+                value={modName}
+                onChange={(e) => setModName(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="My_DBZ_Mod"
+              />
+            </div>
+
+            {/* Character Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Character Name (for display)
+              </label>
+              <input
+                type="text"
+                value={characterName}
+                onChange={(e) => setCharacterName(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="Sonic"
+              />
+            </div>
+
+            {/* Abilities */}
+            <div className="bg-blue-50 p-6 rounded-lg">
+              <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+                <Zap className="text-blue-600" />
+                Select Abilities
+              </h2>
+
+              <div className="space-y-4">
+                {/* Kamehameha */}
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="kamehameha"
+                    checked={includeKamehameha}
+                    onChange={(e) => setIncludeKamehameha(e.target.checked)}
+                    className="mt-1 w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="kamehameha" className="font-medium text-gray-700 cursor-pointer">
+                      Kamehameha (Charge & Release Energy Beam)
+                    </label>
+                    {includeKamehameha && (
+                      <div className="mt-2">
+                        <label className="block text-sm text-gray-600 mb-1">Activation Key:</label>
+                        <select
+                          value={kamehamehaKey}
+                          onChange={(e) => setKamehamehaKey(e.target.value)}
+                          className="px-3 py-1 border border-gray-300 rounded"
+                        >
+                          <option value="Custom1">Custom 1</option>
+                          <option value="Custom2">Custom 2</option>
+                          <option value="Custom3">Custom 3</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Spirit Bomb */}
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="spiritbomb"
+                    checked={includeSpiritBomb}
+                    onChange={(e) => setIncludeSpiritBomb(e.target.checked)}
+                    className="mt-1 w-4 h-4"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="spiritbomb" className="font-medium text-gray-700 cursor-pointer">
+                      Spirit Bomb (Charge & Launch Massive Energy Sphere)
+                    </label>
+                    {includeSpiritBomb && (
+                      <div className="mt-2">
+                        <label className="block text-sm text-gray-600 mb-1">Activation Key:</label>
+                        <select
+                          value={spiritBombKey}
+                          onChange={(e) => setSpiritBombKey(e.target.value)}
+                          className="px-3 py-1 border border-gray-300 rounded"
+                        >
+                          <option value="Custom1">Custom 1</option>
+                          <option value="Custom2">Custom 2</option>
+                          <option value="Custom3">Custom 3</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <h3 className="font-bold text-yellow-800 mb-2">How to Use:</h3>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-yellow-800">
+                <li>Configure your mod settings above</li>
+                <li>Click "Generate & Download PK3"</li>
+                <li>Place the .pk3 file in your SRB2 folder</li>
+                <li>Load it in-game using "addfile" command or the addon menu</li>
+                <li>Bind Custom keys in Controls → Gamepad/Joystick Options</li>
+                <li>Hold the key to charge, release to fire!</li>
+              </ol>
+            </div>
+
+            {/* Generate Button */}
+            <button
+              onClick={downloadPK3}
+              disabled={!includeKamehameha && !includeSpiritBomb}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold py-4 px-6 rounded-lg hover:from-orange-600 hover:to-red-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 text-lg shadow-lg"
+            >
+              <Download size={24} />
+              Generate & Download PK3
+            </button>
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-200 text-center text-sm text-gray-600">
+            <p>This generator creates Lua and SOC files for SRB2 modding.</p>
+            <p className="mt-1">Compatible with SRB2 v2.2+</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SRB2PK3Generator;
